@@ -1,16 +1,19 @@
 //! Query utilities for looking up  metadatas
 
+use tera::{Context as TeraContext, Tera};
 use diesel::{
     pg::Pg,
+    debug_query,
     prelude::*,
     serialize::ToSql,
-    sql_types::{Array, Text},
+    sql_types::{Array, Text, Integer, Nullable, Bool},
 };
 
 use crate::{
+    prelude::*,
     db::{
         any,
-        models::{Nft, NftActivity},
+        models::{Nft, NftActivity, ListedNft},
         not,
         tables::{
             attributes, bid_receipts, current_metadata_owners, listing_receipts,
@@ -66,6 +69,73 @@ pub type NftColumns = (
     metadata_jsons::model,
 );
 
+const METADATAS_QUERY_TEMPLATE: &str = r"
+SELECT
+    metadatas_address,
+    metadatas.name,
+    metadatas.seller_fee_basis_points,
+    metadatas.mint_address,
+    metadatas.primary_sale_happend,
+    metadatas.uri,
+    metadatas_jsons.description,
+    metadatas_jsons.image,
+    metadatas_jsons.category,
+    metadata_jsons.model,
+    listing_receipt.price
+    FROM metadata_jsons
+        LEFT JOIN LATERAL (
+            SELECT * 
+                FROM listing_receipts 
+                WHERE listing_receipts.metadata = metadata_jsons.metadata_address
+                    AND curren_metadata_owners.owner_address = listing_receipts.seller
+                    AND listing_receipts.canceled_at IS NULL
+                    AND listing_receipts.purchase_receipt IS NULL
+                    AND ($4 IS NULL OR listing_receipts.auction_house = ANY($4))
+                ORDER BY listing_receipts.price DESC
+        ) listing_receipts ON TRUE
+        INNER JOIN metadatas ON (metadatas.address = metadata_jsons.metadata_address)
+        INNER JOIN metadata_creators ON (metadatas.address = metadata_creators.metadata_address)
+        INNER JOIN current_metadata_owners ON (metadatas.mint_address = current_metadata_owners.mint_address)
+        {% if offerers %}
+        INNER JOIN LATERAL (
+            SELECT * FROM bid_receipts 
+                WHERE bid_receipts.metadata = metadata_jsons.metadata_address
+                AND ($4 IS NULL OR bid_receipts.auction_house = ANY($4))
+                AND bid_receipts.buyer = ANY($5)
+                AND bid_receipts.canceled_at IS NULL
+                AND bid_receipts.purchase_receipt IS NULL
+        ) bid_receipts ON TRUE
+        {% endif %}
+        {% set attribue_filter_params = 5 %}
+        {% for attribute_filter in attribute_filters %}
+            INNER JOIN LATERAL (
+                SELECT * FROM attributes
+                    WHERE attributes.metadata_address = metadata_jsons.metadata_address
+                    AND attributes.trait_type = ${{ attribue_filter_params + 1 }}
+                    AND attributes.value = ANY(${{ attribue_filter_params + 2 }})
+            ) attributes_{{ attribute_filter.index }} ON TRUE
+        {% set attribue_filter_params = attribute_filter_params + 2 %}
+        {% endfor %}
+    WHERE ($3 IS NULL OR metadata_creators.creator_address = ANY($3))
+        AND metadata_creators.verified
+    {% if listed %}
+        AND listing_receipts.price IS NOT NULL
+    {% endif %}
+    ORDER BY listing_receipts.price DESC, metadatas.name ASC
+    LIMIT $1
+    OFFSET $2;
+-- $1: limit::integer
+-- $2: offset::integer
+-- $3: creators::text[]
+-- $4: auction houses::text[]
+-- $5: offerers::text[]
+{% if attribue_filter_params > 5 %}
+{% for i in range(end=attribue_filter_params, start=6) %}
+-- $i: {% if i is even %}attribue trait {{ i }}::text{% else %}attribue values {{ i }}::text[]{% endif %}
+{% endfor %}
+{% endif %}
+";
+
 /// Handles queries for NFTs
 ///
 /// # Errors
@@ -73,99 +143,40 @@ pub type NftColumns = (
 #[allow(clippy::too_many_lines)]
 pub fn list(
     conn: &Connection,
-    ListQueryOptions {
-        owners,
-        creators,
-        auction_houses,
-        offerers,
-        attributes,
-        listed,
-        collection,
-        limit,
-        offset,
-    }: ListQueryOptions,
-) -> Result<Vec<Nft>> {
-    let listed = listed.unwrap_or(false);
+        owners: impl ToSql<Nullable<Array<Text>>, Pg>,
+        creators: impl ToSql<Nullable<Array<Text>>, Pg>,
+        auction_houses: impl ToSql<Nullable<Array<Text>>, Pg>,
+        offerers: impl ToSql<Nullable<Array<Text>>, Pg>,
+        listed: impl ToSql<Nullable<Bool>, Pg>,
+        limit: impl ToSql<Integer, Pg>,
+        offset: impl ToSql<Integer, Pg>,
+) -> Result<Vec<ListedNft>> {
+    let mut context = TeraContext::new();
+    let attribute_filters: Vec<String> = vec![];
 
-    let mut query = metadatas::table
-        .inner_join(
-            metadata_creators::table.on(metadatas::address.eq(metadata_creators::metadata_address)),
-        )
-        .inner_join(
-            metadata_jsons::table.on(metadatas::address.eq(metadata_jsons::metadata_address)),
-        )
-        .inner_join(
-            current_metadata_owners::table
-                .on(metadatas::mint_address.eq(current_metadata_owners::mint_address)),
-        )
-        .left_outer_join(
-            listing_receipts::table.on(metadatas::address.eq(listing_receipts::metadata)),
-        )
-        .left_outer_join(bid_receipts::table.on(metadatas::address.eq(bid_receipts::metadata)))
-        .left_outer_join(
-            metadata_collection_keys::table
-                .on(metadatas::address.eq(metadata_collection_keys::metadata_address)),
-        )
-        .distinct()
-        .select((NftColumns::default(), listing_receipts::price.nullable()))
-        .order_by((listing_receipts::price.asc(), metadatas::name.asc()))
-        .into_boxed();
+    context.insert("listed", &listed);
+    context.insert("attribute_filters", &attribute_filters);
+    
+    context.insert("offerers", &offerers);
 
-    if let Some(auction_houses) = auction_houses {
-        query = query.filter(listing_receipts::auction_house.eq(any(auction_houses)));
-        query = query.or_filter(listing_receipts::auction_house.is_null());
-    }
+    let query_string = Tera::one_off(METADATAS_QUERY_TEMPLATE, &context, true)?;
 
-    if let Some(attributes) = attributes {
-        query =
-            attributes
-                .into_iter()
-                .fold(query, |acc, AttributeFilter { trait_type, values }| {
-                    let sub = attributes::table
-                        .select(attributes::metadata_address)
-                        .filter(
-                            attributes::trait_type
-                                .eq(trait_type)
-                                .and(attributes::value.eq(any(values))),
-                        );
+    debug!("The template string: {:?}", query_string);
 
-                    acc.filter(metadatas::address.eq(any(sub)))
-                });
-    }
+    let query = diesel::sql_query(query_string)
+        .bind(limit)
+        .bind(offset)
+        .bind(creators)
+        .bind(auction_houses)
+        .bind(offerers);
 
-    if let Some(creators) = creators {
-        query = query.filter(metadata_creators::creator_address.eq(any(creators)));
-        query = query.filter(metadata_creators::verified.eq(true));
-    }
+    let sql = debug_query::<Pg, _>(&query);
+    let result = sql.to_string().replace("\"", "");
 
-    if let Some(collection) = collection {
-        query = query.filter(metadata_collection_keys::collection_address.eq(collection));
-    }
+    debug!("{:?}", result);
+    let rows: Vec<ListedNft>  = query.load(conn).context("Failed to load nft(s)")?;
 
-    if let Some(owners) = owners {
-        query = query.filter(current_metadata_owners::owner_address.eq(any(owners)));
-    }
-
-    if let Some(offerers) = offerers {
-        query = query
-            .filter(bid_receipts::buyer.eq(any(offerers)))
-            .filter(bid_receipts::purchase_receipt.is_null())
-            .filter(bid_receipts::canceled_at.is_null());
-    }
-
-    if listed {
-        query = query.filter(not(listing_receipts::price.is_null()));
-    }
-
-    let rows: Vec<(Nft, Option<i64>)> = query
-        .filter(listing_receipts::purchase_receipt.is_null())
-        .filter(listing_receipts::canceled_at.is_null())
-        .limit(limit)
-        .offset(offset)
-        .load(conn)
-        .context("failed to load nft(s)")?;
-
-    Ok(rows.into_iter().map(|(nft, _)| nft).collect())
+    Ok(rows)
 }
 
 const ACTIVITES_QUERY: &str = r"

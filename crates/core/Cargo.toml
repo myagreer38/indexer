@@ -42,8 +42,10 @@ log = "0.4.14"
 meilisearch-sdk = { version = "0.15.0", optional = true }
 num_cpus = "1.13.1"
 rand = "0.8.4"
+serde = "1.0.137" 
 serde_json = "1.0.70"
 strum = { version = "0.24.0", features = ["derive"] }
+tera = "1.15.0"
 uuid = "0.8.2"
 
 # Fast hash tables

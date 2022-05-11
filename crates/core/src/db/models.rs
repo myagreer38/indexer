@@ -255,6 +255,57 @@ pub struct Nft {
     pub model: Option<String>,
 }
 
+/// Join of `metadatas` and `metadata_jsons` for an NFT
+#[derive(Debug, Clone, Queryable, QueryableByName)]
+pub struct ListedNft {
+    // Table metadata
+    /// The address of this account
+    #[sql_type = "VarChar"]
+    pub address: String,
+
+    /// The name of this item
+    #[sql_type = "Text"]
+    pub name: String,
+
+    /// The royalty percentage of the creator, in basis points (0.01%, values
+    /// range from 0-10,000)
+    #[sql_type = "Int4"]
+    pub seller_fee_basis_points: i32,
+
+    /// The token address for this item
+    #[sql_type = "VarChar"]
+    pub mint_address: String,
+
+    /// True if this item is in the secondary market.  Immutable once set.
+    #[sql_type = "Bool"]
+    pub primary_sale_happened: bool,
+
+    /// Metadata metadata_json uri
+    #[sql_type = "Text"]
+    pub uri: String,
+
+    // Table metadata_json
+    /// Metadata description
+    #[sql_type = "Nullable<Text>"]
+    pub description: Option<String>,
+
+    /// Metadata Image url
+    #[sql_type = "Nullable<Text>"]
+    pub image: Option<String>,
+
+    /// Metadata Category
+    #[sql_type = "Nullable<Text>"]
+    pub category: Option<String>,
+
+    /// Hint for what model the indexer parsed this NFT with
+    #[sql_type = "Nullable<Text>"]
+    pub model: Option<String>,
+
+    /// Hint for what model the indexer parsed this NFT with
+    #[sql_type = "Nullable<Int8>"]
+    pub price: Option<i64>,
+}
+
 /// Union of `listing_receipts` and `purchase_receipts` for an `NFTActivity`
 #[derive(Debug, Clone, Queryable, QueryableByName)]
 pub struct NftActivity {

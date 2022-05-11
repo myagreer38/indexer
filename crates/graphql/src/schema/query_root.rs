@@ -318,18 +318,16 @@ impl QueryRoot {
 
         let conn = context.shared.db.get().context("failed to connect to db")?;
 
-        let query_options = queries::metadatas::ListQueryOptions {
-            owners: owners.map(|a| a.into_iter().map(Into::into).collect()),
-            creators: creators.map(|a| a.into_iter().map(Into::into).collect()),
-            offerers: offerers.map(|a| a.into_iter().map(Into::into).collect()),
-            attributes: attributes.map(|a| a.into_iter().map(Into::into).collect()),
+        let nfts = queries::metadatas::list(
+            &conn,
+            owners,
+            creators,
+            auction_houses,
+            offerers,
             listed,
-            auction_houses: auction_houses.map(|a| a.into_iter().map(Into::into).collect()),
-            collection: collection.map(Into::into),
-            limit: limit.into(),
-            offset: offset.into(),
-        };
-        let nfts = queries::metadatas::list(&conn, query_options)?;
+            limit,
+            offset,
+        )?;
 
         Ok(nfts.into_iter().map(Into::into).collect())
     }

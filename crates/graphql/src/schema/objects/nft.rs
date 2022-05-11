@@ -325,6 +325,37 @@ impl From<models::Nft> for Nft {
     }
 }
 
+impl From<models::ListedNft> for Nft {
+    fn from(
+        models::ListedNft {
+            address,
+            name,
+            seller_fee_basis_points,
+            mint_address,
+            primary_sale_happened,
+            uri,
+            description,
+            image,
+            category,
+            model,
+            ..
+        }: models::ListedNft,
+    ) -> Self {
+        Self {
+            address,
+            name,
+            seller_fee_basis_points,
+            mint_address,
+            primary_sale_happened,
+            uri,
+            description: description.unwrap_or_else(String::new),
+            image: image.unwrap_or_else(String::new),
+            category: category.unwrap_or_else(String::new),
+            model,
+        }
+    }
+}
+
 #[graphql_object(Context = AppContext)]
 impl Nft {
     pub fn address(&self) -> &str {
