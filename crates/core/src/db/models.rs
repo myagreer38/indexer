@@ -1766,6 +1766,23 @@ pub struct StoreCreatorCount<'a> {
     #[sql_type = "Int8"]
     pub nfts: i64,
 }
+
+/// A row in a `listings_featured::list` query, representing a featured listing
+#[derive(Debug, Clone, Queryable, QueryableByName)]
+pub struct FeaturedListing<'a> {
+    /// Public key of the listing
+    #[sql_type = "VarChar"]
+    pub listing_address: Cow<'a, str>,
+
+    /// Public key of the NFT metadata associated with the listing
+    #[sql_type = "VarChar"]
+    pub metadata_address: Cow<'a, str>,
+
+    /// Date the listing was created
+    #[sql_type = "Timestamp"]
+    pub created_at: NaiveDateTime
+}
+
 /// A row in the `feed_events` table
 #[derive(Debug, Clone, Copy, Queryable, Insertable)]
 #[table_name = "feed_events"]

@@ -6,6 +6,7 @@ pub mod charts;
 pub mod feed_event;
 pub mod graph_connection;
 pub mod listing_denylist;
+pub mod listings_featured;
 pub mod metadata_edition;
 pub mod metadatas;
 pub mod nft_count;

@@ -189,3 +189,29 @@ impl Listing {
             .map_err(Into::into)
     }
 }
+
+#[derive(Debug, Clone, GraphQLObject)]
+pub struct FeaturedListing {
+    #[graphql(description = "Public key of the listing.")]
+    pub listing_address: String,
+
+    #[graphql(description = "Public key of the NFT metadata associated with the listing.")]
+    pub metadata_address: String,
+
+    #[graphql(description = "Date the listing was created.")]
+    pub created_at: DateTime<Utc>,
+}
+
+impl<'a> From<models::FeaturedListing<'a>> for FeaturedListing {
+    fn from(models::FeaturedListing {
+        listing_address,
+        metadata_address,
+        created_at
+    }: models::FeaturedListing) -> Self {
+        Self {
+            listing_address: listing_address.to_string(),
+            metadata_address: metadata_address.to_string(),
+            created_at: DateTime::from_utc(created_at, Utc)
+        }
+    }
+}

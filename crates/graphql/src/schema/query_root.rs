@@ -8,7 +8,7 @@ use objects::{
     denylist::Denylist,
     feed_event::FeedEvent,
     graph_connection::GraphConnection,
-    listing::{Listing, ListingColumns, ListingRow},
+    listing::{FeaturedListing, Listing, ListingColumns, ListingRow},
     marketplace::Marketplace,
     nft::{MetadataJson, Nft, NftActivity, NftCount, NftCreator},
     profile::{Profile, TwitterProfilePictureResponse, TwitterShowResponse},
@@ -376,6 +376,17 @@ impl QueryRoot {
             .map(|l| Listing::new(l, now))
             .collect::<Result<_, _>>()
             .map_err(Into::into)
+    }
+
+    fn listings_featured(
+        &self,
+        context: &AppContext,
+        #[graphql(description = "Maximum number of listings to return")] limit: i32,
+        #[graphql(description = "Maximum number of listings to return")] offset: Option<i32>,
+    ) -> FieldResult<Vec<FeaturedListing>> {
+        let conn = context.shared.db.get()?;
+        let rows = queries::listings_featured::list(&conn, limit, offset)?;
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     fn nft(
