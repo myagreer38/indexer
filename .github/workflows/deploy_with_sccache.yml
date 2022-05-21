@@ -40,7 +40,7 @@ jobs:
           ECR_REPOSITORY: ${{ github.event.repository.name }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SCCACHE_CACHE_SIZE: 5G
+          SCCACHE_CACHE_SIZE: 10G
           #SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
 
         run: |
@@ -59,7 +59,7 @@ jobs:
           ECR_REPOSITORY: ${{ github.event.repository.name }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SCCACHE_CACHE_SIZE: 5G
+          SCCACHE_CACHE_SIZE: 10G
           #SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
 
 
@@ -79,7 +79,7 @@ jobs:
           ECR_REPOSITORY: ${{ github.event.repository.name }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SCCACHE_CACHE_SIZE: 5G
+          SCCACHE_CACHE_SIZE: 10G
           #SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
 
 
@@ -99,7 +99,7 @@ jobs:
           ECR_REPOSITORY: ${{ github.event.repository.name }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SCCACHE_CACHE_SIZE: 5G
+          SCCACHE_CACHE_SIZE: 10G
           #SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
 
 
