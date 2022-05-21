@@ -1,14 +1,27 @@
 FROM rust:1.58.1-slim-bullseye AS build
-WORKDIR /build
 
 RUN apt-get update -y && \
   apt-get install -y \
     libpq-dev \
+    wget \
     libssl-dev \
     libudev-dev \
     pkg-config \
   && \
   rm -rf /var/lib/apt/lists/*
+RUN echo 'what'
+RUN wget https://github.com/mozilla/sccache/releases/download/v0.3.0/sccache-v0.3.0-x86_64-unknown-linux-musl.tar.gz \
+    && tar xzf sccache-v0.3.0-x86_64-unknown-linux-musl.tar.gz \
+    && mv sccache-v0.3.0-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
+    && chmod +x /usr/local/bin/sccache
+
+ENV RUSTC_WRAPPER=/usr/local/bin/sccache
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
+ENV SCCACHE_BUCKET=indexer-sccache
+ENV SCCACHE_S3_USE_SSL=true
+
+WORKDIR /build
 
 COPY rust-toolchain.toml ./
 
@@ -18,7 +31,7 @@ RUN rustc --version
 COPY crates crates
 COPY Cargo.toml Cargo.lock ./
 
-RUN cargo build --profile docker \
+RUN AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY cargo build --profile docker \
   --features " \
     holaplex-indexer/geyser, \
     holaplex-indexer/http \
@@ -75,3 +88,4 @@ FROM base AS graphql
 
 COPY --from=build build/bin/holaplex-indexer-graphql bin/
 COPY --from=build build/scripts/docker/graphql.sh startup.sh
+WORKDIR /app
